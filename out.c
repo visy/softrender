@@ -7,6 +7,9 @@
 #include "realfftf.h"
 #include "realfftf.c"
 
+#define WIDTH 720
+#define HEIGHT 406
+
 typedef unsigned char byte;
 
 typedef struct {
@@ -39,8 +42,219 @@ typedef struct {
 
 #include "fetus.h"
 
-#define WIDTH 1280
-#define HEIGHT 720
+///////////////////////////////////////////////////////////////////
+
+#define NUM_LEVELS 256
+#define STACKSIZE 10000
+
+struct plotter {
+    float angle;
+    float angle_increment;
+    float dist;
+    float x;
+    float y;
+    float z;
+    float z_angle;
+    int color;
+    int toggle;
+};
+
+struct plotter p = {0,3.5,0.1,0,0.0,0,  0,0xFFFFFF, 1};
+
+float temp_x=0, temp_y=0, temp_z=0;
+
+#define LSYSTEM_COUNT 8
+
+char lsystem_axiom[LSYSTEM_COUNT][65000];
+char lsystem_rules[LSYSTEM_COUNT][8192];
+int max_iterations[LSYSTEM_COUNT] = {4,4,10,5,0,0,0,0};
+
+typedef struct {
+    int top;
+    struct plotter items[STACKSIZE];
+} stack;
+
+stack st = {0};
+stack st2 = {0};
+
+int pushes = 0;
+int pops = 0;
+
+
+void push(struct plotter x, stack *ps)
+{
+    pushes++;
+    if(ps->top == STACKSIZE-1){
+        printf("Error: stack overflow\n");
+        exit(-1);
+    } else
+        ps->items[++(ps->top)] = x;
+
+    return;
+}
+
+struct plotter pop(stack *ps)
+{
+    pops++;
+    if(ps->top < 0){
+        printf("Error: stack underflow\n");
+        exit(-1);
+    } else
+        return(ps->items[(ps->top)--]);
+}
+
+#define max(a,b) (((a) > (b)) ? (a) : (b))
+#define min(a,b) (((a) < (b)) ? (a) : (b))
+#define abs(a) (((a)<0) ? -(a) : (a))
+#define sign(a) (((a)<0) ? -1 : (a)>0 ? 1 : 0)
+
+void drawLine32(SDL_Surface *screen, int x1, int y1, int x2, int y2, SDL_Color c);
+
+void lineTo(float dx, float dy, float dz, float x0, float y0, SDL_Surface *screen, SDL_Color c) {
+
+    drawLine32(screen, WIDTH/2-(int)(p.x*WIDTH), HEIGHT/2-(int)(p.y*HEIGHT), WIDTH/2-(int)(dx*WIDTH), HEIGHT/2-(int)(dy*HEIGHT), c);
+
+    p.x = dx;
+    p.y = dy;
+    p.z = dz;
+}
+
+void moveRel(int dx, int dy) {
+    int temp_x, temp_y;
+    temp_x = p.x;
+    temp_y = p.y;
+    p.x = temp_x+dx;
+    p.y = temp_y+dy;
+}
+
+void turnTo(float angle) {
+    p.angle = -angle;
+}
+
+void turn(float angle) {
+    p.angle -= angle;    //turn anti-clockwise for positive angle
+}
+
+void z_turn(float angle) {
+    p.z_angle -= angle;    //turn anti-clockwise for positive angle
+}
+
+void forward(float dist, int visible, float x0, float y0, SDL_Surface *screen, SDL_Color c) {
+    const float RadPerDeg = 0.017453393;
+    float temp_x = (p.x + (dist * cos(RadPerDeg * p.angle)));
+    float temp_y = (p.y + (dist * sin(RadPerDeg * p.angle)));
+    float temp_z = (p.z + (dist * sin(RadPerDeg * p.z_angle)));
+
+    if (visible == 1) lineTo(temp_x,temp_y,temp_z, x0, y0, screen, c);
+
+    p.x = temp_x;
+    p.y = temp_y;
+    p.z = temp_z;
+
+
+}
+
+char *processed_rules[512][512];
+char *split_rules[512];
+
+int iteration = 0;
+
+void append(char* s, char c)
+{
+        int len = strlen(s);
+        s[len] = c;
+        s[len+1] = '\0';
+}
+
+void lsystem_iteration() {
+
+    int ff;
+
+    int iter = 0;
+    for (ff=0;ff<LSYSTEM_COUNT;ff++) {
+        iteration = 0;
+
+    while (iteration < max_iterations[ff]) {
+
+    printf("%d", iter++);
+
+    int i = 0;
+
+    // parse rules for comma delimited rules
+
+    char *rules_copy = (char *)malloc(strlen(lsystem_rules[ff]) + 1);
+    strcpy(rules_copy, lsystem_rules[ff]);
+
+    char *pch;
+    pch = strtok(rules_copy,",");
+    while (pch != NULL) {
+        split_rules[i] = pch;
+        pch = strtok(NULL, ",");
+        i++;
+      }
+
+    // parse split rules by =
+
+    int number_of_rules = i;
+
+    int j;
+
+    for(j=0;j<i;j++) {
+
+        char *pch2;
+        pch2 = strtok(split_rules[j], "=");
+        processed_rules[j][0] = pch2;
+        while (pch2 != NULL) {
+            processed_rules[j][1] = pch2;
+            pch2 = strtok(NULL, "=");
+        }
+
+    }
+
+    // iterate through the axiom, producing the next generation
+
+
+    int k = 0;
+
+    char *new_text = "";
+    char *lsystem_axiom_temp = "";
+
+    int rule_found = 0;
+
+    new_text = (char*)malloc(65000);
+    lsystem_axiom_temp = (char*)malloc(65000);
+    strcpy(lsystem_axiom_temp, "");
+
+    for (i=0;i<strlen(lsystem_axiom[ff]);i++) {
+
+        int rule_matched = 0;
+        for (k=0;k<number_of_rules;k++) {
+            if(processed_rules[k][0][0] == lsystem_axiom[ff][i]) { strcat(lsystem_axiom_temp,processed_rules[k][1]); rule_matched = 1; }
+        }
+
+        if (rule_matched == 0) append(lsystem_axiom_temp, lsystem_axiom[ff][i]);
+    }
+
+    strcpy(lsystem_axiom[ff], lsystem_axiom_temp);
+
+    free(new_text);
+    free(rules_copy);
+    free(lsystem_axiom_temp);
+
+    iteration++;
+
+    }
+
+    }
+}
+
+// < z vasemmalle
+// > z oikealle
+
+
+
+////////////////////////////////////////////////////////////////////////
+
 
 byte HMap[256*256];       /* Height field */
 byte CMap[256*256];       /* Color map */
@@ -150,6 +364,9 @@ void drawLine8(SDL_Surface *screen, int x1, int y1, int x2, int y2, Uint8 c)
 
 void drawLine32(SDL_Surface *screen, int x1, int y1, int x2, int y2, SDL_Color c)
 {
+        if (x1 < 0 || y1 < 0 || x2 < 0 || y2 < 0) return;
+        if (x1 > WIDTH-1 || y1 > HEIGHT-1 || x2 > WIDTH-1 || y2 > HEIGHT-1) return;
+
          int dx, dy, cxy,dxy;
         /* calculate the distances */
         dx = abs(x1 - x2);
@@ -467,7 +684,7 @@ void drawTriangle(vec3i A, vec3i B, vec3i C,int shade){
 
 
 
-void routine(int x0,int y0,float aa,SDL_Surface *screen)
+void render_3d_model(int x0,int y0,float aa,SDL_Surface *screen)
 {
 
 	memset(Video,0,WIDTH*HEIGHT);
@@ -575,7 +792,7 @@ float FOV=3.141592654/16;   /* half of the xy field of view */
 /*
 // Draw the view from the point x0,y0 (16.16) looking at angle a
 */
-void View(int x0,int y0,float aa,SDL_Surface *screen)
+void render_heightmap(int x0,int y0,float aa,SDL_Surface *screen)
 {
   int d;
   int a,b,h,u0,v0,u1,v1,h0,h1,h2,h3;
@@ -637,12 +854,63 @@ void View(int x0,int y0,float aa,SDL_Surface *screen)
   SDL_UpdateRect(screen, 0, 0, 0, 0);
 }
 
-float min(float a, float b)
+///////////////////////////////////////////////////////// LSYSTEM_RENDER
+
+int lastframe = 0;
+
+void render_lsystem(int x0,int y0,float aa,SDL_Surface *screen, float millis)
 {
-  if (a < b) return a;
-  else if(a > b) return b;
-  else return a;
+  int j = 0;  // lsystem_index
+
+  float t = millis*0.01;
+
+//  push(p, &st);
+
+  int li = 1;
+
+  SDL_LockSurface(screen);
+  
+    int beg = lastframe-10;
+    if (beg < 0) beg = 0;
+
+    p.angle_increment=cos(t);
+    p.dist = 0.007+cos(t*0.01)*0.0001;
+
+    SDL_Color cc = { cos(t)*255, sin(t)*255, cos(t)*255 };
+
+    for(j=beg;j<lastframe;j+=1) 
+    {
+
+      if (lsystem_axiom[li][j] == 'f') 
+      {
+          forward(p.dist, 1, x0, y0, screen, cc);
+      }
+
+      else if (lsystem_axiom[li][j] == '-' && p.toggle == 1) turn(-((360/(p.angle_increment))));
+      else if (lsystem_axiom[li][j] == '+' && p.toggle == 1) turn((360/(p.angle_increment)));
+
+      else if (lsystem_axiom[li][j] == '<'  && p.toggle == 1) z_turn(-((360/p.angle_increment)));
+      else if (lsystem_axiom[li][j] == '>' && p.toggle == 1) z_turn((360/p.angle_increment));
+
+      else if (lsystem_axiom[li][j] == '!') p.toggle = -p.toggle;
+
+      else if (lsystem_axiom[li][j] == '[') push(p, &st);
+      else if (lsystem_axiom[li][j] == ']') p = pop(&st);
+    }
+
+  SDL_UnlockSurface(screen);
+
+  //p = pop(&st);
+
+  lastframe=(int)(t*10+cos(t)*2);
+  if (lastframe >= strlen(lsystem_axiom[li])) lastframe = 0;
+
+  SDL_UpdateRect(screen, 0, 0, 0, 0);
+
 }
+
+/////////////////////////////////////////////////////////////// MAIN
+
 
 main(int argc, char *argv[])
 {
@@ -678,8 +946,8 @@ main(int argc, char *argv[])
 
   InitializeFFT(256);
 
-  screen = SDL_SetVideoMode(WIDTH, HEIGHT, 8,
-			(SDL_HWSURFACE|SDL_HWPALETTE)); //|SDL_FULLSCREEN
+  screen = SDL_SetVideoMode(WIDTH, HEIGHT, 32,
+			(SDL_HWSURFACE)); //|SDL_FULLSCREEN
   if ( screen == NULL )
   {
     fprintf(stderr, "Couldn't init video mode: %s\n", SDL_GetError());
@@ -783,6 +1051,34 @@ main(int argc, char *argv[])
       CMap[i+j]=k-CMap[i-1+j];
     }
 
+///////////// LSYSTEM INIT
+
+  int zx, zy, zz;
+
+  for (zx=0;zx<512;zx++) {
+      split_rules[zx] = 0;
+  }
+
+  for (zy=0;zy<512;zy++) {
+      for (zx=0;zx<512;zx++) {
+          processed_rules[zx][zy] = 0;
+      }
+  }
+
+  strcpy(lsystem_axiom[0], "fx"); // cross, angle 4, 0.08
+  strcpy(lsystem_rules[0], "x=fx+fx+fxfy-fy-,y=+fx+fxfy-fy-fy");
+
+  strcpy(lsystem_axiom[1], "++++f");  // bush, angle 16
+  strcpy(lsystem_rules[1], "f=ff-[-f+f+f]+[+f-f-f]");
+
+  strcpy(lsystem_axiom[2], "fx"); // dragon, angle 8
+  strcpy(lsystem_rules[2], "y=+fx--fy+,x=-fx++fy-");
+
+  strcpy(lsystem_axiom[3], "f"); // sierpinski
+  strcpy(lsystem_rules[3], "f=fxf,x=+fxf-fxf-fxf+");
+
+  lsystem_iteration();
+
   fft_type data1[256],data2[256];
   fft_type re,im,value;
 
@@ -863,8 +1159,9 @@ main(int argc, char *argv[])
 
     // RENDER --------------------------------------
     /* Draw the frame */
-   // View(x0,y0,a,screen);
-    routine(x0,y0,a,screen);
+   render_lsystem(0,0,a,screen, millis);
+   //render_heightmap(x0,y0,a,screen);
+   // render_3d_model(x0,y0,a,screen);
     // /RENDER -------------------------------------
 
 
