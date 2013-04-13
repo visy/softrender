@@ -98,7 +98,8 @@ struct plotter pop(stack *ps)
     pops++;
     if(ps->top < 0){
         printf("Error: stack underflow\n");
-        exit(-1);
+        struct plotter p;
+        return p;
     } else
         return(ps->items[(ps->top)--]);
 }
@@ -108,11 +109,13 @@ struct plotter pop(stack *ps)
 #define abs(a) (((a)<0) ? -(a) : (a))
 #define sign(a) (((a)<0) ? -1 : (a)>0 ? 1 : 0)
 
-void drawLine32(SDL_Surface *screen, int x1, int y1, int x2, int y2, SDL_Color c);
+void drawLineAdd32(SDL_Surface *screen, int x1, int y1, int x2, int y2, Uint32 c);
 
 void lineTo(float dx, float dy, float dz, float x0, float y0, SDL_Surface *screen, SDL_Color c) {
 
-    drawLine32(screen, WIDTH/2-(int)(p.x*WIDTH), HEIGHT/2-(int)(p.y*HEIGHT), WIDTH/2-(int)(dx*WIDTH), HEIGHT/2-(int)(dy*HEIGHT), c);
+    Uint32 cc = SDL_MapRGBA(screen->format, c.r, c.g, c.b, 2);
+
+    drawLineAdd32(screen, WIDTH/2-(int)(p.x*WIDTH), HEIGHT/2-(int)(p.y*HEIGHT), WIDTH/2-(int)(dx*WIDTH), HEIGHT/2-(int)(dy*HEIGHT), cc);
 
     p.x = dx;
     p.y = dy;
@@ -275,34 +278,69 @@ void music_mix_callback(void *udata, Uint8 *stream, int len)
   music_mix_len=len;
 }
 
-void setPixel8(SDL_Surface *screen, int x, int y, Uint8 c)
+Uint32 getpixel(SDL_Surface *surface, int x, int y)
 {
-  *((Uint8*)(screen->pixels+y*screen->pitch+x))=c;
+    int bpp = surface->format->BytesPerPixel;
+    /* Here p is the address to the pixel we want to retrieve */
+    Uint8 *p = (Uint8 *)surface->pixels + y * surface->pitch + x * bpp;
+
+    switch(bpp) {
+    case 1:
+        return *p;
+        break;
+
+    case 2:
+        return *(Uint16 *)p;
+        break;
+
+    case 3:
+        if(SDL_BYTEORDER == SDL_BIG_ENDIAN)
+            return p[0] << 16 | p[1] << 8 | p[2];
+        else
+            return p[0] | p[1] << 8 | p[2] << 16;
+        break;
+
+    case 4:
+        return *(Uint32 *)p;
+        break;
+
+    default:
+        return 0;       /* shouldn't happen, but avoids warnings */
+    }
 }
 
-Uint8 getPixel8(SDL_Surface *screen, int x, int y)
+void putpixel(SDL_Surface *surface, int x, int y, Uint32 pixel)
 {
-  return *((Uint8*)(screen->pixels+y*screen->pitch+x));
+    int bpp = surface->format->BytesPerPixel;
+    /* Here p is the address to the pixel we want to set */
+    Uint8 *p = (Uint8 *)surface->pixels + y * surface->pitch + x * bpp;
+
+    switch(bpp) {
+    case 1:
+        *p = pixel;
+        break;
+
+    case 2:
+        *(Uint16 *)p = pixel;
+        break;
+
+    case 3:
+        if(SDL_BYTEORDER == SDL_BIG_ENDIAN) {
+            p[0] = (pixel >> 16) & 0xff;
+            p[1] = (pixel >> 8) & 0xff;
+            p[2] = pixel & 0xff;
+        } else {
+            p[0] = pixel & 0xff;
+            p[1] = (pixel >> 8) & 0xff;
+            p[2] = (pixel >> 16) & 0xff;
+        }
+        break;
+
+    case 4:
+        *(Uint32 *)p = pixel;
+        break;
+    }
 }
-
-
-void setPixel32(SDL_Surface *screen, int x, int y, SDL_Color c)
-{
-  *((Uint8*)(screen->pixels+y*screen->pitch+x*4+2))=c.r;
-  *((Uint8*)(screen->pixels+y*screen->pitch+x*4+1))=c.g;
-  *((Uint8*)(screen->pixels+y*screen->pitch+x*4))=c.b;
-}
-
-SDL_Color getPixel32(SDL_Surface *screen, int x, int y)
-{
-  SDL_Color c;
-  c.r = *((Uint8*)(screen->pixels+y*screen->pitch+x*4+2));
-  c.g = *((Uint8*)(screen->pixels+y*screen->pitch+x*4+1));
-  c.b = *((Uint8*)(screen->pixels+y*screen->pitch+x*4));
-  return c;
-}
-
-
 /* line algorithm GPL by Julien Carme <julien.carme@acm.org> */
 
 #define SWAP(x,y)  \
@@ -310,117 +348,14 @@ SDL_Color getPixel32(SDL_Surface *screen, int x, int y)
         y = x - y; \
         x = x - y;
 
-void drawLine8(SDL_Surface *screen, int x1, int y1, int x2, int y2, Uint8 c)
-{
-         int dx, dy, cxy,dxy;
-        /* calculate the distances */
-        dx = abs(x1 - x2);
-        dy = abs(y1 - y2);
 
-        cxy = 0;
-        if (dy > dx) {
-                /* Follow Y axis */
-                if (y1 > y2) {
-                        SWAP(y1, y2);
-                        SWAP(x1, x2);
-                }
-
-                if (x1 > x2)
-                        dxy = -1;
-                else
-                        dxy = 1;
-
-                for (y1=y1; y1<y2; y1++) {
-                        cxy += dx;
-                        if (cxy >= dy) {
-                                x1+= dxy;
-                                cxy -= dy;
-                        }
-                      setPixel8(screen, x1, y1, c);
-                }
-        } else {
-                /* Follow X axis */
-                if (x1 > x2) {
-                        SWAP(x1, x2);
-                        SWAP(y1, y2);
-                }
-
-                if (y1 > y2)
-                        dxy = -1;
-                else
-                        dxy = 1;
-
-                for (x1=x1; x1<x2; x1++) {
-                        cxy += dy;
-                        if (cxy >= dx) {
-                                y1+=dxy;
-                                cxy -= dx;
-                        }
-                      setPixel8(screen, x1, y1, c);
-                }
-        }
-
-}
-
-void drawLine32(SDL_Surface *screen, int x1, int y1, int x2, int y2, SDL_Color c)
-{
+void drawLineAdd32(SDL_Surface *screen, int x1, int y1, int x2, int y2, Uint32 c)
+{ 
         if (x1 < 0 || y1 < 0 || x2 < 0 || y2 < 0) return;
         if (x1 > WIDTH-1 || y1 > HEIGHT-1 || x2 > WIDTH-1 || y2 > HEIGHT-1) return;
 
-         int dx, dy, cxy,dxy;
-        /* calculate the distances */
-        dx = abs(x1 - x2);
-        dy = abs(y1 - y2);
-
-        cxy = 0;
-        if (dy > dx) {
-                /* Follow Y axis */
-                if (y1 > y2) {
-                        SWAP(y1, y2);
-                        SWAP(x1, x2);
-                }
-
-                if (x1 > x2)
-                        dxy = -1;
-                else
-                        dxy = 1;
-
-                for (y1=y1; y1<y2; y1++) {
-                        cxy += dx;
-                        if (cxy >= dy) {
-                                x1+= dxy;
-                                cxy -= dy;
-                        }
-                      setPixel32(screen, x1, y1, c);
-                }
-        } else {
-                /* Follow X axis */
-                if (x1 > x2) {
-                        SWAP(x1, x2);
-                        SWAP(y1, y2);
-                }
-
-                if (y1 > y2)
-                        dxy = -1;
-                else
-                        dxy = 1;
-
-                for (x1=x1; x1<x2; x1++) {
-                        cxy += dy;
-                        if (cxy >= dx) {
-                                y1+=dxy;
-                                cxy -= dx;
-                        }
-                      setPixel32(screen, x1, y1, c);
-                }
-        }
-
-}
-
-void drawLineAdd32(SDL_Surface *screen, int x1, int y1, int x2, int y2, SDL_Color c)
-{
         int dx, dy, cxy,dxy;
-        SDL_Color gc;
+        Uint32 gc;
 
         /* calculate the distances */
         dx = abs(x1 - x2);
@@ -445,9 +380,9 @@ void drawLineAdd32(SDL_Surface *screen, int x1, int y1, int x2, int y2, SDL_Colo
                                 x1+= dxy;
                                 cxy -= dy;
                         }
-                      gc=getPixel32(screen, x1, y1);
-                      gc.r+=c.r; gc.g+=c.g; gc.b+=c.b;
-                      setPixel32(screen, x1, y1, gc);
+                      gc=getpixel(screen, x1, y1);
+                      gc+=c;
+                      putpixel(screen, x1, y1, gc);
                 }
         } else {
                 /* Follow X axis */
@@ -467,9 +402,9 @@ void drawLineAdd32(SDL_Surface *screen, int x1, int y1, int x2, int y2, SDL_Colo
                                 y1+=dxy;
                                 cxy -= dx;
                         }
-                      gc=getPixel32(screen, x1, y1);
-                      gc.r+=c.r; gc.g+=c.g; gc.b+=c.b;
-                      setPixel32(screen, x1, y1, gc);
+                      gc=getpixel(screen, x1, y1);
+                      gc+=c;
+                      putpixel(screen, x1, y1, gc);
                 }
         }
 
@@ -858,7 +793,7 @@ void render_heightmap(int x0,int y0,float aa,SDL_Surface *screen)
 
 int lastframe = 0;
 
-void render_lsystem(int x0,int y0,float aa,SDL_Surface *screen, float millis)
+void render_lsystem(int x0,int y0,float aa,SDL_Surface *screen,SDL_Surface *dblbuf, float millis)
 {
   int j = 0;  // lsystem_index
 
@@ -868,22 +803,22 @@ void render_lsystem(int x0,int y0,float aa,SDL_Surface *screen, float millis)
 
   int li = 1;
 
-  SDL_LockSurface(screen);
-  
+  SDL_LockSurface(dblbuf);
+
     int beg = lastframe-10;
     if (beg < 0) beg = 0;
 
     p.angle_increment=cos(t);
     p.dist = 0.007+cos(t*0.01)*0.0001;
 
-    SDL_Color cc = { cos(t)*255, sin(t)*255, cos(t)*255 };
 
     for(j=beg;j<lastframe;j+=1) 
     {
+    SDL_Color cc = { cos(t+p.dist)*255, sin(t+p.dist)*255, cos(t+p.dist)*255, 64 };
 
       if (lsystem_axiom[li][j] == 'f') 
       {
-          forward(p.dist, 1, x0, y0, screen, cc);
+          forward(p.dist, 1, x0, y0, dblbuf, cc);
       }
 
       else if (lsystem_axiom[li][j] == '-' && p.toggle == 1) turn(-((360/(p.angle_increment))));
@@ -898,15 +833,22 @@ void render_lsystem(int x0,int y0,float aa,SDL_Surface *screen, float millis)
       else if (lsystem_axiom[li][j] == ']') p = pop(&st);
     }
 
-  SDL_UnlockSurface(screen);
+  SDL_UnlockSurface(dblbuf);
 
   //p = pop(&st);
 
   lastframe=(int)(t*10+cos(t)*2);
   if (lastframe >= strlen(lsystem_axiom[li])) lastframe = 0;
 
-  SDL_UpdateRect(screen, 0, 0, 0, 0);
+  int xx1 = cos(millis*0.01)*abs(tan(millis*0.1)*2);
+  int yy1 = sin(millis*0.01)*abs(tan(millis*0.1)*2);
 
+  SDL_Rect rs = {0,0,WIDTH,HEIGHT};
+  SDL_Rect rd = {xx1,yy1-millis*0.00001,WIDTH,HEIGHT};
+
+  SDL_BlitSurface(dblbuf, &rs, screen, &rd);
+  SDL_UpdateRect(screen, 0, 0, 0, 0);
+  SDL_Flip(screen);
 }
 
 /////////////////////////////////////////////////////////////// MAIN
@@ -915,6 +857,8 @@ void render_lsystem(int x0,int y0,float aa,SDL_Surface *screen, float millis)
 main(int argc, char *argv[])
 {
   SDL_Surface *screen;
+  SDL_Surface *dblbuf;
+
   int done;
   int i,k;
   float ss,sa,a,s;
@@ -947,10 +891,33 @@ main(int argc, char *argv[])
   InitializeFFT(256);
 
   screen = SDL_SetVideoMode(WIDTH, HEIGHT, 32,
-			(SDL_HWSURFACE)); //|SDL_FULLSCREEN
+			(SDL_HWSURFACE|SDL_SRCALPHA)); //|SDL_FULLSCREEN
   if ( screen == NULL )
   {
     fprintf(stderr, "Couldn't init video mode: %s\n", SDL_GetError());
+    exit(1);
+  }
+
+    Uint32 rmask, gmask, bmask, amask;
+
+    /* SDL interprets each pixel as a 32-bit number, so our masks must depend
+       on the endianness (byte order) of the machine */
+#if SDL_BYTEORDER == SDL_BIG_ENDIAN
+    rmask = 0xff000000;
+    gmask = 0x00ff0000;
+    bmask = 0x0000ff00;
+    amask = 0x000000ff;
+#else
+    rmask = 0x000000ff;
+    gmask = 0x0000ff00;
+    bmask = 0x00ff0000;
+    amask = 0xff000000;
+#endif
+
+  dblbuf = SDL_CreateRGBSurface(SDL_SWSURFACE|SDL_SRCALPHA, WIDTH, HEIGHT, 32, rmask, gmask, bmask, amask);
+  if(dblbuf == NULL) 
+  {
+    fprintf(stderr, "CreateRGBSurface failed: %s\n", SDL_GetError());
     exit(1);
   }
 
@@ -1079,6 +1046,7 @@ main(int argc, char *argv[])
 
   lsystem_iteration();
 
+
   fft_type data1[256],data2[256];
   fft_type re,im,value;
 
@@ -1159,7 +1127,7 @@ main(int argc, char *argv[])
 
     // RENDER --------------------------------------
     /* Draw the frame */
-   render_lsystem(0,0,a,screen, millis);
+   render_lsystem(0,0,a,screen,dblbuf, millis);
    //render_heightmap(x0,y0,a,screen);
    // render_3d_model(x0,y0,a,screen);
     // /RENDER -------------------------------------
