@@ -113,7 +113,7 @@ void drawLineAdd32(SDL_Surface *screen, int x1, int y1, int x2, int y2, Uint32 c
 
 void lineTo(float dx, float dy, float dz, float x0, float y0, SDL_Surface *screen, SDL_Color c) {
 
-    Uint32 cc = SDL_MapRGBA(screen->format, c.r, c.g, c.b, 2);
+    Uint32 cc = SDL_MapRGBA(screen->format, c.r, c.g, c.b, abs(5+cos(dx+dy*y0)*2));
 
     drawLineAdd32(screen, WIDTH/2-(int)(p.x*WIDTH), HEIGHT/2-(int)(p.y*HEIGHT), WIDTH/2-(int)(dx*WIDTH), HEIGHT/2-(int)(dy*HEIGHT), cc);
 
@@ -819,10 +819,10 @@ void render_lsystem(int x0,int y0,float aa,SDL_Surface *screen,SDL_Surface *dblb
     {
       if (lsystem_axiom[li][j] == 'f') 
       {
-    SDL_Color cc = { cos(t*0.01+p.dist*lastframe)*64, sin(t*0.02+p.dist)*32, cos(t*0.01+p.dist)*64, 64 };
+    SDL_Color cc = { cos(t*0.01+p.dist+lastframe*0.001)*64, sin(t*0.02+p.dist+lastframe*0.003)*32, cos(t*0.01+p.dist+lastframe*0.002)*64, 64 };
           forward(p.dist, 1, x0, y0, dblbuf, cc);
-              cc.r = sin(t*0.03+p.dist)*32;
-              cc.g = cos(t*0.02+p.dist)*64;
+              cc.r = sin(t*0.03+p.dist+lastframe*0.001)*32;
+              cc.g = cos(t*0.02+p.dist+lastframe*0.002)*64;
 
 
           forward(p.dist, 1, x0, y0, dblbuf, cc);
