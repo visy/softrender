@@ -179,7 +179,7 @@ void lsystem_iteration() {
 
     while (iteration < max_iterations[ff]) {
 
-    printf("%d", iter++);
+    printf("%d\n", iter++);
 
     int i = 0;
 
@@ -805,19 +805,26 @@ void render_lsystem(int x0,int y0,float aa,SDL_Surface *screen,SDL_Surface *dblb
 
   SDL_LockSurface(dblbuf);
 
+  lastframe++;
+  if (lastframe >= strlen(lsystem_axiom[li])) lastframe = 0;
+
     int beg = lastframe-10;
     if (beg < 0) beg = 0;
 
     p.angle_increment=cos(t);
-    p.dist = 0.007+cos(t*0.01)*0.0001;
+    p.dist = 0.007+cos(t*200.1)*0.01;
 
 
-    for(j=beg;j<lastframe;j+=1) 
+    for(j=0;j<lastframe;j+=1) 
     {
-    SDL_Color cc = { cos(t+p.dist)*255, sin(t+p.dist)*255, cos(t+p.dist)*255, 64 };
-
       if (lsystem_axiom[li][j] == 'f') 
       {
+    SDL_Color cc = { cos(t*0.01+p.dist*lastframe)*64, sin(t*0.02+p.dist)*32, cos(t*0.01+p.dist)*64, 64 };
+          forward(p.dist, 1, x0, y0, dblbuf, cc);
+              cc.r = sin(t*0.03+p.dist)*32;
+              cc.g = cos(t*0.02+p.dist)*64;
+
+
           forward(p.dist, 1, x0, y0, dblbuf, cc);
       }
 
@@ -837,13 +844,11 @@ void render_lsystem(int x0,int y0,float aa,SDL_Surface *screen,SDL_Surface *dblb
 
   //p = pop(&st);
 
-  lastframe=(int)(t*10+cos(t)*2);
-  if (lastframe >= strlen(lsystem_axiom[li])) lastframe = 0;
 
   int xx1 = cos(millis*0.01)*abs(tan(millis*0.1)*2);
   int yy1 = sin(millis*0.01)*abs(tan(millis*0.1)*2);
 
-  SDL_Rect rs = {0,0,WIDTH,HEIGHT};
+  SDL_Rect rs = {xx1*0.01,0,WIDTH,HEIGHT};
   SDL_Rect rd = {xx1,yy1-millis*0.00001,WIDTH,HEIGHT};
 
   SDL_BlitSurface(dblbuf, &rs, screen, &rd);
