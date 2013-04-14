@@ -185,7 +185,7 @@ var Hyperlapse = function(container, params) {
 		console.log(e);
 	}
 
-	_renderer = new THREE.CanvasRenderer({ preserveDrawingBuffer:true });
+	_renderer = new THREE.WebGLRenderer({ preserveDrawingBuffer:true });
 	_renderer.autoClearColor = false;
 	_renderer.setSize( _w, _h );
 

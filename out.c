@@ -3,12 +3,18 @@
 #include <math.h>
 #include <string.h>
 #include "SDL/SDL.h"
+#include "SDL/SDL_image.h"
 #include "SDL/SDL_mixer.h"
 #include "realfftf.h"
 #include "realfftf.c"
 
 #define WIDTH 720
 #define HEIGHT 406
+
+#define TOKIOLAPSE_W 576
+#define TOKIOLAPSE_H 324
+
+SDL_Surface* tokiolapse;
 
 typedef unsigned char byte;
 
@@ -856,6 +862,34 @@ void render_lsystem(int x0,int y0,float aa,SDL_Surface *screen,SDL_Surface *dblb
   SDL_Flip(screen);
 }
 
+/////////////////////////////////////// TOKIOLAPSE
+
+void render_tokiolapse(int x0,int y0,float aa,SDL_Surface *screen,SDL_Surface *dblbuf, float millis)
+{
+  float t = millis*0.01;
+
+  int li = 1;
+
+  lastframe=(int)(t*0.8+cos(t)) % 83;
+  if (lastframe >= 83) lastframe = 0;
+
+  SDL_SetAlpha(tokiolapse,SDL_SRCALPHA, t*0.1);
+
+  for (int i = 0; i < 7; i++)
+  {
+    SDL_Rect rs = {0,lastframe*TOKIOLAPSE_H,TOKIOLAPSE_W, TOKIOLAPSE_H};
+    SDL_Rect rd = {0,0,TOKIOLAPSE_W, TOKIOLAPSE_H};
+    SDL_BlitSurface(tokiolapse, &rs, screen, &rd);
+  }
+
+  int beg = lastframe-7;
+  if (beg < 0) beg = 0;
+
+  SDL_UpdateRect(screen, 0, 0, 0, 0);
+  SDL_Flip(screen);
+}
+
+
 /////////////////////////////////////////////////////////////// MAIN
 
 
@@ -886,7 +920,7 @@ main(int argc, char *argv[])
     exit(1);
   }
 
-  Mix_Music* music = Mix_LoadMUS("data\\music.ogg");
+  Mix_Music* music = Mix_LoadMUS("data\\0.ogg");
 
   if ( music == NULL )
     fprintf(stderr, "Couldn't load music: %s\n", Mix_GetError());
@@ -925,6 +959,19 @@ main(int argc, char *argv[])
     fprintf(stderr, "CreateRGBSurface failed: %s\n", SDL_GetError());
     exit(1);
   }
+
+  ////////////////////////////////// LOAD TIMELAPSE IMAGES
+
+  IMG_Init(IMG_INIT_JPG|IMG_INIT_PNG);
+
+  tokiolapse = IMG_Load("data\\tokiolapse.jpg");
+
+  if (tokiolapse == NULL)
+  {
+    fprintf(stderr, "Error: %s\n", SDL_GetError());
+    exit(1);
+  }
+
 
   /* Set up the first 64 colors to a grayscale */
   /*
@@ -1055,6 +1102,8 @@ main(int argc, char *argv[])
   fft_type data1[256],data2[256];
   fft_type re,im,value;
 
+  printf("le main routine...\n");
+
   while(!done)
   {
     if (!Mix_PlayingMusic())
@@ -1132,7 +1181,8 @@ main(int argc, char *argv[])
 
     // RENDER --------------------------------------
     /* Draw the frame */
-   render_lsystem(0,0,a,screen,dblbuf, millis);
+   render_tokiolapse(0,0,a,screen,dblbuf, millis);
+   //render_lsystem(0,0,a,screen,dblbuf, millis);
    //render_heightmap(x0,y0,a,screen);
    // render_3d_model(x0,y0,a,screen);
     // /RENDER -------------------------------------
